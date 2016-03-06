@@ -9,7 +9,7 @@ import argparse
 
 def run():
 
-    client = jack.Client("registration callback test");
+    client = jack.Client("ports list example");
 
     for port in client.get_ports():
         print port.get_name()

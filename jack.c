@@ -180,6 +180,22 @@ static PyObject* port_get_short_name(Port* self)
     return (PyObject*)PyString_FromString(jack_port_short_name(self->port));
 }
 
+static PyObject* port_set_short_name(Port* self, PyObject* args)
+{
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name)) {
+        return NULL;
+    }
+
+    // 0 on success, otherwise a non-zero error code.
+    if(jack_port_set_name(self->port, name)) {
+        return NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
 static PyObject* port_get_aliases(Port* self)
 {
     PyObject* aliases_list = PyList_New(0);
@@ -225,6 +241,12 @@ static PyMethodDef port_methods[] = {
         (PyCFunction)port_get_short_name,
         METH_NOARGS,
         "Return port's name without the preceding name of the asssociated client.",
+        },
+    {
+        "set_short_name",
+        (PyCFunction)port_set_short_name,
+        METH_VARARGS,
+        "Modify a port's short name. May be called at any time.",
         },
     {
         "get_aliases",
