@@ -9,10 +9,11 @@ import argparse
 
 def run():
 
-    client = jack.Client("ports list example");
+    client = jack.Client("list ports example");
 
     for port in client.get_ports():
         print port.get_name()
+        print '\tclient: ' + port.get_client_name()
         print '\tshort: ' + port.get_short_name()
         for alias in port.get_aliases():
             print '\talias: ' + alias

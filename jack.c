@@ -196,6 +196,23 @@ static PyObject* port_set_short_name(Port* self, PyObject* args)
     return Py_None;
 }
 
+static PyObject* port_get_client_name(Port* self)
+{
+    // e.g. "PulseAudio JACK Sink:front-left"
+    const char* port_name = jack_port_name(self->port);
+
+    int client_name_length = strlen(port_name) - strlen(jack_port_short_name(self->port)) - 1;
+
+    // e.g. "PulseAudio JACK Sink"
+    char* client_name = (char*) malloc(jack_port_name_size());
+    strncpy(client_name, port_name, client_name_length);
+    client_name[client_name_length] = '\0';
+    PyObject* client_name_python = PyString_FromString(client_name);
+    free(client_name);
+
+    return client_name_python;
+}
+
 static PyObject* port_get_aliases(Port* self)
 {
     PyObject* aliases_list = PyList_New(0);
@@ -240,7 +257,13 @@ static PyMethodDef port_methods[] = {
         "get_short_name",
         (PyCFunction)port_get_short_name,
         METH_NOARGS,
-        "Return port's name without the preceding name of the asssociated client.",
+        "Return port's name without the preceding name of the associated client.",
+        },
+    {
+        "get_client_name",
+        (PyCFunction)port_get_client_name,
+        METH_NOARGS,
+        "Return the name of the associated client.",
         },
     {
         "set_short_name",
