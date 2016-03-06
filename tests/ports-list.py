@@ -13,6 +13,7 @@ def run():
 
     for port in client.get_ports():
         print port.get_name()
+        print '\tshort: ' + port.get_short_name()
         for alias in port.get_aliases():
             print '\talias: ' + alias
 

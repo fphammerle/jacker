@@ -175,6 +175,11 @@ static PyObject* port_get_name(Port* self)
     return (PyObject*)PyString_FromString(jack_port_name(self->port));
 }
 
+static PyObject* port_get_short_name(Port* self)
+{
+    return (PyObject*)PyString_FromString(jack_port_short_name(self->port));
+}
+
 static PyObject* port_get_aliases(Port* self)
 {
     PyObject* aliases_list = PyList_New(0);
@@ -214,6 +219,12 @@ static PyMethodDef port_methods[] = {
         (PyCFunction)port_get_name,
         METH_NOARGS,
         "Return port's name.",
+        },
+    {
+        "get_short_name",
+        (PyCFunction)port_get_short_name,
+        METH_NOARGS,
+        "Return port's name without the preceding name of the asssociated client.",
         },
     {
         "get_aliases",
