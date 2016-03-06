@@ -175,6 +175,27 @@ static PyObject* port_get_name(Port* self)
     return (PyObject*)PyString_FromString(jack_port_name(self->port));
 }
 
+static PyObject* port_get_aliases(Port* self)
+{
+    PyObject* aliases_list = PyList_New(0);
+    if(!aliases_list) {
+        return NULL;
+    }
+
+    char* aliases[2];
+    aliases[0] = (char*) malloc(jack_port_name_size());
+    aliases[1] = (char*) malloc(jack_port_name_size());
+    int alias_count = jack_port_get_aliases(self->port, aliases);
+    int alias_index;
+    for(alias_index = 0; alias_index < alias_count; alias_index++) {
+        PyList_Append(aliases_list, PyString_FromString(aliases[alias_index]));
+    }
+    free(aliases[0]);
+    free(aliases[1]);
+
+    return aliases_list;
+}
+
 static PyObject* port___repr__(Port* self)
 {
     static PyObject* format;
@@ -193,6 +214,12 @@ static PyMethodDef port_methods[] = {
         (PyCFunction)port_get_name,
         METH_NOARGS,
         "Return port's name.",
+        },
+    {
+        "get_aliases",
+        (PyCFunction)port_get_aliases,
+        METH_NOARGS,
+        "Return list of assigned aliases.",
         },
     {NULL},
     };
