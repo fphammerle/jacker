@@ -96,6 +96,27 @@ static PyObject* client_get_name(Client* self)
     return (PyObject*)PyString_FromString(jack_get_client_name(self->client));
 }
 
+static PyObject* client_get_ports(Client* self)
+{
+    PyObject* ports = PyList_New(0);
+    if(!ports) {
+        return NULL;
+    }
+
+    const char** port_names = jack_get_ports(self->client, NULL, NULL, 0);
+    int port_index;
+    for(port_index = 0; port_names[port_index] != NULL; port_index++) {
+        Port* port = PyObject_New(Port, &port_type);
+        port->port = jack_port_by_name(self->client, port_names[port_index]);
+        if(PyList_Append(ports, (PyObject*)port)) {
+            return NULL;
+        }
+    }
+    jack_free(port_names);
+
+    return ports;
+}
+
 static PyObject* client_set_port_registration_callback(Client* self, PyObject* args)
 {
     PyObject* callback;
@@ -133,6 +154,12 @@ static PyMethodDef client_methods[] = {
         (PyCFunction)client_get_name,
         METH_NOARGS,
         "Return client's actual name.",
+        },
+    {
+        "get_ports",
+        (PyCFunction)client_get_ports,
+        METH_NOARGS,
+        "Return list of ports.",
         },
     {
         "set_port_registration_callback",
