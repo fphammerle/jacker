@@ -9,6 +9,8 @@ typedef struct {
     PyObject* port_registered_callback_argument;
     PyObject* port_unregistered_callback;
     PyObject* port_unregistered_callback_argument;
+    PyObject* port_renamed_callback;
+    PyObject* port_renamed_callback_argument;
 } Client;
 
 typedef struct {
@@ -66,6 +68,39 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
     }
 }
 
+static void jack_port_renamed_callback(jack_port_id_t port_id, const char* old_name, const char* new_name, void* arg)
+{
+    Client* client = (Client*)arg;
+
+    if(client->port_renamed_callback) {
+        // Ensure that the current thread is ready to call the Python API.
+        // No Python API calls are allowed before this call.
+        PyGILState_STATE gil_state = PyGILState_Ensure();
+
+        Port* port = PyObject_New(Port, &port_type);
+        port->port = jack_port_by_id(client->client, port_id);
+
+        // 'O' increases reference count
+        PyObject* callback_argument_list = Py_BuildValue(
+                "(O,s,s,O)",
+                (PyObject*)port,
+                old_name,
+                new_name,
+                client->port_renamed_callback_argument
+                );
+        PyObject* result = PyObject_CallObject(client->port_renamed_callback, callback_argument_list);
+        Py_DECREF(callback_argument_list);
+        if(!result) {
+            PyErr_PrintEx(0);
+        } else {
+            Py_DECREF(result);
+        }
+
+        // Release the thread. No Python API calls are allowed beyond this point.
+        PyGILState_Release(gil_state);
+    }
+}
+
 static PyObject* client___new__(PyTypeObject* type, PyObject* args, PyObject* kwargs)
 {
     Client* self = (Client*)type->tp_alloc(type, 0);
@@ -94,6 +129,18 @@ static PyObject* client___new__(PyTypeObject* type, PyObject* args, PyObject* kw
             );
         if(error_code) {
             PyErr_SetString(error, "Could not set port registration callback.");
+            return NULL;
+        }
+
+        self->port_renamed_callback = NULL;
+        self->port_renamed_callback_argument = NULL;
+        error_code = jack_set_port_rename_callback(
+            self->client,
+            jack_port_renamed_callback,
+            (void*)self
+            );
+        if(error_code) {
+            PyErr_SetString(error, "Could not set port rename callback.");
             return NULL;
         }
     }
@@ -186,6 +233,30 @@ static PyObject* client_set_port_unregistered_callback(Client* self, PyObject* a
     return Py_None;
 }
 
+static PyObject* client_set_port_renamed_callback(Client* self, PyObject* args)
+{
+    PyObject* callback = 0;
+    PyObject* callback_argument = 0;
+    if(!PyArg_ParseTuple(args, "O|O", &callback, &callback_argument)) {
+        return NULL;
+    }
+    if(!PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be callable.");
+        return NULL;
+    }
+
+    Py_XINCREF(callback);
+    Py_XDECREF(self->port_renamed_callback);
+    self->port_renamed_callback = callback;
+
+    Py_XINCREF(callback_argument);
+    Py_XDECREF(self->port_renamed_callback_argument);
+    self->port_renamed_callback_argument = callback_argument;
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
 static void client_dealloc(Client* self)
 {
     jack_client_close(self->client);
@@ -222,6 +293,12 @@ static PyMethodDef client_methods[] = {
         (PyCFunction)client_set_port_unregistered_callback,
         METH_VARARGS,
         "Tell the JACK server to call a function whenever a port is unregistered.",
+        },
+    {
+        "set_port_renamed_callback",
+        (PyCFunction)client_set_port_renamed_callback,
+        METH_VARARGS,
+        "Tell the JACK server to call a function whenever a port is renamed.",
         },
     {NULL},
     };
