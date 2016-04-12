@@ -17,6 +17,10 @@ def run():
         print '\tshort: ' + port.get_short_name()
         for alias in port.get_aliases():
             print '\talias: ' + alias
+        print '\ttype: %s %s' % (
+            port.get_type(),
+            'input' if port.is_input() else ('output' if port.is_output() else ''),
+            )
 
 def _init_argparser():
 

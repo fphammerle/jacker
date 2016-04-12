@@ -68,6 +68,7 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
     }
 }
 
+// typedef void(* JackPortRenameCallback)(jack_port_id_t port, const char *old_name, const char *new_name, void *arg)
 static void jack_port_renamed_callback(jack_port_id_t port_id, const char* old_name, const char* new_name, void* arg)
 {
     Client* client = (Client*)arg;
@@ -303,6 +304,18 @@ static PyMethodDef client_methods[] = {
     {NULL},
     };
 
+static PyObject* port_is_input(Port* self)
+{
+    // The flags "JackPortIsInput" and "JackPortIsOutput" are mutually exclusive.
+    return (PyObject*)PyBool_FromLong(jack_port_flags(self->port) & JackPortIsInput);
+}
+
+static PyObject* port_is_output(Port* self)
+{
+    // The flags "JackPortIsInput" and "JackPortIsOutput" are mutually exclusive.
+    return (PyObject*)PyBool_FromLong(jack_port_flags(self->port) & JackPortIsOutput);
+}
+
 static PyObject* port_get_name(Port* self)
 {
     return (PyObject*)PyString_FromString(jack_port_name(self->port));
@@ -311,6 +324,11 @@ static PyObject* port_get_name(Port* self)
 static PyObject* port_get_short_name(Port* self)
 {
     return (PyObject*)PyString_FromString(jack_port_short_name(self->port));
+}
+
+static PyObject* port_get_type(Port* self)
+{
+    return (PyObject*)PyString_FromString(jack_port_type(self->port));
 }
 
 static PyObject* port_set_short_name(Port* self, PyObject* args)
@@ -371,15 +389,31 @@ static PyObject* port___repr__(Port* self)
 {
     static PyObject* format;
     if(!format) {
-        format = PyString_FromString("jack.Port(name = '%s')");
+        format = PyString_FromString("jack.Port(name = '%s', type = '%s')");
     }
-    PyObject* name = PyString_FromString(jack_port_name(self->port));
-    PyObject* repr = PyString_Format(format, name);
-    Py_DECREF(name);
+    PyObject* args = Py_BuildValue(
+            "(s,s)",
+            jack_port_name(self->port),
+            jack_port_type(self->port)
+            );
+    PyObject* repr = PyString_Format(format, args);
+    Py_DECREF(args);
     return repr;
 }
 
 static PyMethodDef port_methods[] = {
+    {
+        "is_input",
+        (PyCFunction)port_is_input,
+        METH_NOARGS,
+        "Return true if the port can receive data.",
+        },
+    {
+        "is_output",
+        (PyCFunction)port_is_output,
+        METH_NOARGS,
+        "Return true if data can be read from the port.",
+        },
     {
         "get_name",
         (PyCFunction)port_get_name,
@@ -391,6 +425,12 @@ static PyMethodDef port_methods[] = {
         (PyCFunction)port_get_short_name,
         METH_NOARGS,
         "Return port's name without the preceding name of the associated client.",
+        },
+    {
+        "get_type",
+        (PyCFunction)port_get_type,
+        METH_NOARGS,
+        "Return port's type.",
         },
     {
         "get_client_name",
