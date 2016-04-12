@@ -6,6 +6,7 @@ typedef struct {
     PyObject_HEAD
     jack_client_t* client;
     PyObject* registration_callback;
+    PyObject* registration_callback_argument;
 } Client;
 
 typedef struct {
@@ -32,7 +33,13 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
         Port* port = PyObject_New(Port, &port_type);
         port->port = jack_port_by_id(client->client, port_id);
 
-        PyObject* callback_argument_list = Py_BuildValue("(O,i)", (PyObject*)port, registered);
+        // 'O' increases reference count
+        PyObject* callback_argument_list;
+        if(client->registration_callback_argument) {
+            callback_argument_list = Py_BuildValue("(O,i,O)", (PyObject*)port, registered, client->registration_callback_argument);
+        } else {
+            callback_argument_list = Py_BuildValue("(O,i)", (PyObject*)port, registered);
+        }
         PyObject* result = PyObject_CallObject(client->registration_callback, callback_argument_list);
         Py_DECREF(callback_argument_list);
         if(!result) {
@@ -119,8 +126,9 @@ static PyObject* client_get_ports(Client* self)
 
 static PyObject* client_set_port_registration_callback(Client* self, PyObject* args)
 {
-    PyObject* callback;
-    if(!PyArg_ParseTuple(args, "O", &callback)) {
+    PyObject* callback = 0;
+    PyObject* callback_argument = 0;
+    if(!PyArg_ParseTuple(args, "O|O", &callback, &callback_argument)) {
         return NULL;
     }
     if(!PyCallable_Check(callback)) {
@@ -131,6 +139,10 @@ static PyObject* client_set_port_registration_callback(Client* self, PyObject* a
     Py_XINCREF(callback);
     Py_XDECREF(self->registration_callback);
     self->registration_callback = callback;
+
+    Py_XINCREF(callback_argument);
+    Py_XDECREF(self->registration_callback_argument);
+    self->registration_callback_argument = callback_argument;
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -313,12 +325,12 @@ PyMODINIT_FUNC initjack()
     }
     Py_INCREF(&client_type);
     PyModule_AddObject(module, "Client", (PyObject*)&client_type);
-    
+
     port_type.tp_name = "jack.Port";
     port_type.tp_basicsize = sizeof(Port);
     port_type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
     // Forbid direct instantiation.
-    port_type.tp_new = NULL; 
+    port_type.tp_new = NULL;
     port_type.tp_repr = (reprfunc)port___repr__;
     port_type.tp_methods = port_methods;
     if(PyType_Ready(&port_type) < 0) {
