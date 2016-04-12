@@ -5,8 +5,10 @@
 typedef struct {
     PyObject_HEAD
     jack_client_t* client;
-    PyObject* registration_callback;
-    PyObject* registration_callback_argument;
+    PyObject* port_registered_callback;
+    PyObject* port_registered_callback_argument;
+    PyObject* port_unregistered_callback;
+    PyObject* port_unregistered_callback_argument;
 } Client;
 
 typedef struct {
@@ -26,8 +28,19 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
     // register: non-zero if the port is being registered, zero if the port is being unregistered
     Client* client = (Client*)arg;
 
-    if(client->registration_callback) {
+    PyObject* callback;
+    PyObject* callback_argument;
+    if(registered) {
+        callback = client->port_registered_callback;
+        callback_argument = client->port_registered_callback_argument;
+    } else {
+        callback = client->port_unregistered_callback;
+        callback_argument = client->port_unregistered_callback_argument;
+    }
+
+    if(callback) {
         // Ensure that the current thread is ready to call the Python API.
+        // No Python API calls are allowed before this call.
         PyGILState_STATE gil_state = PyGILState_Ensure();
 
         Port* port = PyObject_New(Port, &port_type);
@@ -35,12 +48,12 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
 
         // 'O' increases reference count
         PyObject* callback_argument_list;
-        if(client->registration_callback_argument) {
-            callback_argument_list = Py_BuildValue("(O,i,O)", (PyObject*)port, registered, client->registration_callback_argument);
+        if(callback_argument) {
+            callback_argument_list = Py_BuildValue("(O,O)", (PyObject*)port, callback_argument);
         } else {
-            callback_argument_list = Py_BuildValue("(O,i)", (PyObject*)port, registered);
+            callback_argument_list = Py_BuildValue("(O)", (PyObject*)port);
         }
-        PyObject* result = PyObject_CallObject(client->registration_callback, callback_argument_list);
+        PyObject* result = PyObject_CallObject(callback, callback_argument_list);
         Py_DECREF(callback_argument_list);
         if(!result) {
             PyErr_PrintEx(0);
@@ -72,7 +85,8 @@ static PyObject* client___new__(PyTypeObject* type, PyObject* args, PyObject* kw
             return NULL;
         }
 
-        self->registration_callback = NULL;
+        self->port_registered_callback = NULL;
+        self->port_unregistered_callback = NULL;
         int error_code = jack_set_port_registration_callback(
             self->client,
             jack_registration_callback,
@@ -124,7 +138,7 @@ static PyObject* client_get_ports(Client* self)
     return ports;
 }
 
-static PyObject* client_set_port_registration_callback(Client* self, PyObject* args)
+static PyObject* client_set_port_registered_callback(Client* self, PyObject* args)
 {
     PyObject* callback = 0;
     PyObject* callback_argument = 0;
@@ -137,12 +151,36 @@ static PyObject* client_set_port_registration_callback(Client* self, PyObject* a
     }
 
     Py_XINCREF(callback);
-    Py_XDECREF(self->registration_callback);
-    self->registration_callback = callback;
+    Py_XDECREF(self->port_registered_callback);
+    self->port_registered_callback = callback;
 
     Py_XINCREF(callback_argument);
-    Py_XDECREF(self->registration_callback_argument);
-    self->registration_callback_argument = callback_argument;
+    Py_XDECREF(self->port_registered_callback_argument);
+    self->port_registered_callback_argument = callback_argument;
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+static PyObject* client_set_port_unregistered_callback(Client* self, PyObject* args)
+{
+    PyObject* callback = 0;
+    PyObject* callback_argument = 0;
+    if(!PyArg_ParseTuple(args, "O|O", &callback, &callback_argument)) {
+        return NULL;
+    }
+    if(!PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be callable.");
+        return NULL;
+    }
+
+    Py_XINCREF(callback);
+    Py_XDECREF(self->port_unregistered_callback);
+    self->port_unregistered_callback = callback;
+
+    Py_XINCREF(callback_argument);
+    Py_XDECREF(self->port_unregistered_callback_argument);
+    self->port_unregistered_callback_argument = callback_argument;
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -174,10 +212,16 @@ static PyMethodDef client_methods[] = {
         "Return list of ports.",
         },
     {
-        "set_port_registration_callback",
-        (PyCFunction)client_set_port_registration_callback,
+        "set_port_registered_callback",
+        (PyCFunction)client_set_port_registered_callback,
         METH_VARARGS,
-        "Tell the JACK server to call a function whenever a port is registered or unregistered.",
+        "Tell the JACK server to call a function whenever a port is registered.",
+        },
+    {
+        "set_port_unregistered_callback",
+        (PyCFunction)client_set_port_unregistered_callback,
+        METH_VARARGS,
+        "Tell the JACK server to call a function whenever a port is unregistered.",
         },
     {NULL},
     };

@@ -6,17 +6,17 @@ import jack
 import time
 import argparse
 
-def port_registration_callback(port, register):
+def port_registered_callback(port):
+    print(str(port) + ' registered')
 
-    if register:
-        print(str(port) + ' registered')
-    else:
-        print(str(port) + ' unregistered')
+def port_unregistered_callback(port):
+    print(str(port) + ' unregistered')
 
 def run():
 
     client = jack.Client("registration callback test");
-    client.set_port_registration_callback(port_registration_callback)
+    client.set_port_registered_callback(port_registered_callback)
+    client.set_port_unregistered_callback(port_unregistered_callback)
     client.activate();
 
     print("client name: " + client.get_name())

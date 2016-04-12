@@ -4,12 +4,12 @@ import glob
 
 setup(
     name = 'jacker',
-    version = '0.2',
+    version = '0.2.1',
     description = 'JACK API for Python',
     author = 'Fabian Peter Hammerle',
     author_email = 'fabian.hammerle@gmail.com',
     url = 'https://github.com/fphammerle/jacker',
-    download_url = 'https://github.com/fphammerle/jacker/tarball/0.2',
+    download_url = 'https://github.com/fphammerle/jacker/tarball/0.2.1',
     keywords = [],
     classifiers = [],
     ext_modules = [
