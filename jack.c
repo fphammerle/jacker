@@ -28,6 +28,37 @@ static PyTypeObject port_type = {
     PyObject_HEAD_INIT(NULL)
     };
 
+static PyObject* python_import(const char* name)
+{
+    PyObject* python_name = PyString_FromString(name);
+    PyObject* object = PyImport_Import(python_name);
+    Py_DECREF(python_name);
+    return object;
+}
+
+long get_reference_count(PyObject* object)
+{
+    PyObject* sys = python_import("sys");
+    PyObject* getrefcount = PyObject_GetAttrString(sys, "getrefcount");
+    // Return the reference count of the object.
+    // The count returned is generally one higher than you might expect,
+    // because it includes the (temporary) reference as an argument to getrefcount().
+    PyObject* argument_list = PyTuple_Pack(1, object);
+    PyObject* result = PyObject_CallObject(getrefcount, argument_list);
+    Py_DECREF(argument_list);
+    long count;
+    if(!result) {
+        PyErr_PrintEx(0);
+        count = -2;
+    } else {
+        count = PyInt_AsLong(result);
+        Py_DECREF(result);
+    }
+    Py_DECREF(getrefcount);
+    Py_DECREF(sys);
+    return count;
+}
+
 static void jack_registration_callback(jack_port_id_t port_id, int registered, void* arg)
 {
     // register: non-zero if the port is being registered, zero if the port is being unregistered
