@@ -411,6 +411,16 @@ static PyObject* client_set_shutdown_callback(Client* self, PyObject* args)
 static void client_dealloc(Client* self)
 {
     jack_client_close(self->client);
+
+    Py_XDECREF(self->port_registered_callback);
+    Py_XDECREF(self->port_registered_callback_argument);
+    Py_XDECREF(self->port_renamed_callback);
+    Py_XDECREF(self->port_renamed_callback_argument);
+    Py_XDECREF(self->port_unregistered_callback);
+    Py_XDECREF(self->port_unregistered_callback_argument);
+    Py_XDECREF(self->shutdown_callback);
+    Py_XDECREF(self->shutdown_callback_argument);
+
     self->ob_type->tp_free((PyObject*)self);
 }
 
