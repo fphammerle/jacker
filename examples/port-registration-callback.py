@@ -14,7 +14,7 @@ def port_unregistered_callback(client, port):
 
 def run():
 
-    client = jack.Client("registration callback test");
+    client = jack.Client("port registration callback");
     client.set_port_registered_callback(port_registered_callback)
     client.set_port_unregistered_callback(port_unregistered_callback)
     client.activate();
