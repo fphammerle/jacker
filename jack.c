@@ -212,6 +212,17 @@ static PyObject* client_activate(Client* self) {
         return Py_None;
     }
 }
+
+static PyObject* client_deactivate(Client* self) {
+    int error_code = jack_deactivate(self->client);
+    if(error_code) {
+        PyErr_SetString(error, "");
+        return NULL;
+    } else {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+}
 #include <stdio.h>
 static PyObject* client_connect(Client* self, PyObject* args)
 {
@@ -381,6 +392,12 @@ static PyMethodDef client_methods[] = {
         (PyCFunction)client_connect,
         METH_VARARGS,
         "Establish a connection between two ports.",
+        },
+    {
+        "deactivate",
+        (PyCFunction)client_deactivate,
+        METH_NOARGS,
+        "Tell the Jack server that the program is ready to start processing audio.",
         },
     {
         "get_name",
