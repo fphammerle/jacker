@@ -20,6 +20,7 @@ typedef struct {
 
 static PyObject* error;
 static PyObject* failure;
+static PyObject* connection_exists;
 
 static PyTypeObject port_type = {
     PyObject_HEAD_INIT(NULL)
@@ -159,6 +160,34 @@ static PyObject* client_activate(Client* self) {
         return Py_None;
     }
 }
+#include <stdio.h>
+static PyObject* client_connect(Client* self, PyObject* args)
+{
+    PyObject *source_port_python, *target_port_python;
+    // The object’s reference count is not increased.
+    if(!PyArg_ParseTuple(args, "O!O!", &port_type, &source_port_python, &port_type, &target_port_python)) {
+        return NULL;
+    }
+
+    Port* source_port = (Port*) source_port_python;
+    Port* target_port = (Port*) target_port_python;
+
+    int return_code = jack_connect(
+            self->client,
+            jack_port_name(source_port->port),
+            jack_port_name(target_port->port)
+            );
+
+    if(return_code) {
+        if(return_code == EEXIST) {
+            PyErr_SetString(connection_exists, "The specified ports are already connected.");
+        }
+        return NULL;
+    } else {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+}
 
 static PyObject* client_get_name(Client* self)
 {
@@ -270,6 +299,12 @@ static PyMethodDef client_methods[] = {
         (PyCFunction)client_activate,
         METH_NOARGS,
         "Tell the Jack server that the program is ready to start processing audio.",
+        },
+    {
+        "connect",
+        (PyCFunction)client_connect,
+        METH_VARARGS,
+        "Establish a connection between two ports.",
         },
     {
         "get_name",
@@ -471,6 +506,10 @@ PyMODINIT_FUNC initjack()
     failure = PyErr_NewException((char*)"jack.Failure", error, NULL);
     Py_INCREF(failure);
     PyModule_AddObject(module, "Failure", failure);
+
+    connection_exists = PyErr_NewException((char*)"jack.ConnectionExists", error, NULL);
+    Py_INCREF(connection_exists);
+    PyModule_AddObject(module, "ConnectionExists", connection_exists);
 
     static PyTypeObject client_type = {
         PyObject_HEAD_INIT(NULL)
