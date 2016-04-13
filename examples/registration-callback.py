@@ -6,10 +6,10 @@ import jack
 import time
 import argparse
 
-def port_registered_callback(port):
+def port_registered_callback(client, port):
     print(str(port) + ' registered')
 
-def port_unregistered_callback(port):
+def port_unregistered_callback(client, port):
     print(str(port) + ' unregistered')
 
 def run():

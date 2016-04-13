@@ -85,9 +85,9 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
         // 'O' increases reference count
         PyObject* callback_argument_list;
         if(callback_argument) {
-            callback_argument_list = Py_BuildValue("(O,O)", (PyObject*)port, callback_argument);
+            callback_argument_list = Py_BuildValue("(O,O,O)", (PyObject*)client, (PyObject*)port, callback_argument);
         } else {
-            callback_argument_list = Py_BuildValue("(O)", (PyObject*)port);
+            callback_argument_list = Py_BuildValue("(O,O)", (PyObject*)client, (PyObject*)port);
         }
         PyObject* result = PyObject_CallObject(callback, callback_argument_list);
         Py_DECREF(callback_argument_list);
@@ -118,7 +118,8 @@ static int jack_port_renamed_callback(jack_port_id_t port_id, const char* old_na
 
         // 'O' increases reference count
         PyObject* callback_argument_list = Py_BuildValue(
-                "(O,s,s,O)",
+                "(O,O,s,s,O)",
+                (PyObject*)client,
                 (PyObject*)port,
                 old_name,
                 new_name,
@@ -155,13 +156,15 @@ static void jack_shutdown_callback(jack_status_t code, const char* reason, void*
         PyObject* callback_argument_list = NULL;
         if(client->shutdown_callback_argument) {
             callback_argument_list = Py_BuildValue(
-                "(s,O)",
+                "(O,s,O)",
+                (PyObject*)client,
                 reason,
                 client->shutdown_callback_argument
                 );
         } else {
             callback_argument_list = Py_BuildValue(
-                "(s)",
+                "(O,s)",
+                (PyObject*)client,
                 reason
                 );
         }
