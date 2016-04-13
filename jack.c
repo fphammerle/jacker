@@ -71,9 +71,10 @@ static void jack_registration_callback(jack_port_id_t port_id, int registered, v
     }
 }
 
-// typedef void(* JackPortRenameCallback)(jack_port_id_t port, const char *old_name, const char *new_name, void *arg)
-static void jack_port_renamed_callback(jack_port_id_t port_id, const char* old_name, const char* new_name, void* arg)
+// typedef int (*JackPortRenameCallback)(jack_port_id_t port, const char* old_name, const char* new_name, void *arg);
+static int jack_port_renamed_callback(jack_port_id_t port_id, const char* old_name, const char* new_name, void* arg)
 {
+    int return_code = 0;
     Client* client = (Client*)arg;
 
     if(client->port_renamed_callback) {
@@ -96,13 +97,17 @@ static void jack_port_renamed_callback(jack_port_id_t port_id, const char* old_n
         Py_DECREF(callback_argument_list);
         if(!result) {
             PyErr_PrintEx(0);
+            return_code = -1;
         } else {
             Py_DECREF(result);
+            return_code = 0;
         }
 
         // Release the thread. No Python API calls are allowed beyond this point.
         PyGILState_Release(gil_state);
     }
+
+    return return_code;
 }
 
 // typedef void(* JackInfoShutdownCallback)(jack_status_t code, const char *reason, void *arg)
