@@ -570,7 +570,10 @@ static PyMethodDef port_methods[] = {
     {NULL},
     };
 
-PyMODINIT_FUNC initjack()
+#ifndef PyMODINIT_FUNC	// declarations for DLL import/export
+#define PyMODINIT_FUNC void
+#endif
+PyMODINIT_FUNC initjack(void)
 {
     // Initialize and acquire the global interpreter lock.
     // This must be done in the main thread before creating engaging in any thread operations.
