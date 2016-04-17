@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+script_dir="$( dirname "$BASH_SOURCE" )"
+project_dir="$( readlink -f "$script_dir/.." )"
+
+docker build -t jacker "$script_dir"
+
+docker run -it -v "$project_dir":/jacker --workdir=/jacker jacker \
+    bash -c "pip install .; bash"

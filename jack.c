@@ -187,9 +187,13 @@ static PyObject* client___new__(PyTypeObject* type, PyObject* args, PyObject* kw
 
     if(self) {
         char* client_name;
+        unsigned char use_exact_name = 0;
         char* server_name = NULL;
-        static char* kwlist[] = {"client_name", "server_name", NULL};
-        if(!PyArg_ParseTupleAndKeywords(args, kwargs, "s|s", kwlist, &client_name, &server_name)) {
+        static char* kwlist[] = {"client_name", "use_exact_name", "server_name", NULL};
+        if(!PyArg_ParseTupleAndKeywords(
+                    args, kwargs, "s|bs", kwlist,
+                    &client_name, &use_exact_name, &server_name
+                    )) {
             return NULL;
         }
 
@@ -197,11 +201,18 @@ static PyObject* client___new__(PyTypeObject* type, PyObject* args, PyObject* kw
         if(server_name) {
             open_options |= JackServerName;
         }
+        if(use_exact_name) {
+            open_options |= JackUseExactName;
+        }
 
         jack_status_t status;
         self->client = jack_client_open(client_name, open_options, &status, server_name);
         if(!self->client) {
-            if(status & JackFailure) {
+            if(status & JackNameNotUnique) {
+                PyErr_SetString(error, "The desired client name was not unique.");
+            } else if(status & JackServerError) {
+                PyErr_SetString(error, "Communication error with the JACK server.");
+            } else if(status & JackFailure) {
                 PyErr_SetString(failure, "Overall operation failed.");
             }
             return NULL;

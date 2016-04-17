@@ -17,6 +17,7 @@ setup(
             'jack', 
             sources = glob.glob('*.c'),
             libraries = ['jack'],
-            )
+            ),
         ],
+    tests_require = ['pytest'],
     )
