@@ -186,13 +186,20 @@ static PyObject* client___new__(PyTypeObject* type, PyObject* args, PyObject* kw
     Client* self = (Client*)type->tp_alloc(type, 0);
 
     if(self) {
-        const char* name;
-        if(!PyArg_ParseTuple(args, "s", &name)) {
+        char* client_name;
+        char* server_name = NULL;
+        static char* kwlist[] = {"client_name", "server_name", NULL};
+        if(!PyArg_ParseTupleAndKeywords(args, kwargs, "s|s", kwlist, &client_name, &server_name)) {
             return NULL;
         }
 
+        jack_options_t open_options = JackNullOption;
+        if(server_name) {
+            open_options |= JackServerName;
+        }
+
         jack_status_t status;
-        self->client = jack_client_open(name, JackNullOption, &status);
+        self->client = jack_client_open(client_name, open_options, &status, server_name);
         if(!self->client) {
             if(status & JackFailure) {
                 PyErr_SetString(failure, "Overall operation failed.");

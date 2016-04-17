@@ -11,4 +11,4 @@ JACK development files:
 Installation
 ------------
 
-    pip install --user jacker jacker
+    pip install --user jacker
