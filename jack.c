@@ -1,6 +1,10 @@
 #include <python2.7/Python.h>
 
+#include <string.h>
 #include <jack/jack.h>
+
+const int port_input = 1;
+const int port_output = 2;
 
 typedef struct {
     PyObject_HEAD
@@ -330,6 +334,57 @@ static PyObject* client_get_ports(Client* self)
     return ports;
 }
 
+static PyObject* client_register_port(Client* self, PyObject* args, PyObject* kwargs)
+{
+    char* name;
+    char* type;
+    int direction;
+    unsigned char physical = 0;
+    unsigned char terminal = 0;
+    unsigned long buffer_size = 0;
+    static char* kwlist[] = {
+        "name", "type", "direction", "physical",
+        "terminal", "buffer_size", NULL
+        };
+    if(!PyArg_ParseTupleAndKeywords(
+                args, kwargs, "ssi|bbk", kwlist,
+                &name, &type, &direction,
+                &physical, &terminal, &buffer_size
+                )) {
+        return NULL;
+    }
+
+    unsigned long flags = 0;
+    if(direction == port_input) {
+        flags |= JackPortIsInput;
+    } else if(direction == port_output) {
+        flags |= JackPortIsOutput;
+    } else {
+        PyErr_SetString(PyExc_ValueError, "Invalid port direction given.");
+        return NULL;
+    }
+    if(physical) {
+        flags |= JackPortIsPhysical;
+    }
+    if(terminal) {
+        flags |= JackPortIsTerminal;
+    }
+
+    Port* port = PyObject_New(Port, &port_type);
+    port->port = jack_port_register(
+            self->client,
+            name,
+            type,
+            flags,
+            64
+            );
+    if(!port->port) {
+        PyErr_SetString(error, "Could not register port.");
+        return NULL;
+    }
+    return (PyObject*)port;
+}
+
 static PyObject* client_set_port_registered_callback(Client* self, PyObject* args)
 {
     PyObject* callback = 0;
@@ -474,6 +529,12 @@ static PyMethodDef client_methods[] = {
         "Return list of ports.",
         },
     {
+        "register_port",
+        (PyCFunction)client_register_port,
+        METH_VARARGS | METH_KEYWORDS,
+        "Register a new port for the client.",
+        },
+    {
         "set_port_registered_callback",
         (PyCFunction)client_set_port_registered_callback,
         METH_VARARGS,
@@ -500,16 +561,26 @@ static PyMethodDef client_methods[] = {
     {NULL},
     };
 
-static PyObject* port_is_input(Port* self)
+unsigned char port_is_input(const Port* port)
 {
-    // The flags "JackPortIsInput" and "JackPortIsOutput" are mutually exclusive.
-    return (PyObject*)PyBool_FromLong(jack_port_flags(self->port) & JackPortIsInput);
+    return jack_port_flags(port->port) & JackPortIsInput;
 }
 
-static PyObject* port_is_output(Port* self)
+static PyObject* python_port_is_input(Port* self)
 {
     // The flags "JackPortIsInput" and "JackPortIsOutput" are mutually exclusive.
-    return (PyObject*)PyBool_FromLong(jack_port_flags(self->port) & JackPortIsOutput);
+    return (PyObject*)PyBool_FromLong(port_is_input(self));
+}
+
+unsigned char port_is_output(const Port* port)
+{
+    return jack_port_flags(port->port) & JackPortIsOutput;
+}
+
+static PyObject* python_port_is_output(Port* self)
+{
+    // The flags "JackPortIsInput" and "JackPortIsOutput" are mutually exclusive.
+    return (PyObject*)PyBool_FromLong(port_is_output(self));
 }
 
 static PyObject* port_get_name(Port* self)
@@ -581,32 +652,78 @@ static PyObject* port_get_aliases(Port* self)
     return aliases_list;
 }
 
+unsigned char port_is_physical(const Port* port)
+{
+    return jack_port_flags(port->port) & JackPortIsPhysical;
+}
+
+unsigned char port_is_terminal(const Port* port)
+{
+    return jack_port_flags(port->port) & JackPortIsTerminal;
+}
+
 static PyObject* port___repr__(Port* self)
 {
     static PyObject* format;
     if(!format) {
-        format = PyString_FromString("jack.Port(name = '%s', type = '%s')");
+        format = PyString_FromString(
+                "jack.Port(name = '%s', type = '%s', direction = %s, physical = %s, terminal = %s)"
+                );
     }
     PyObject* args = Py_BuildValue(
-            "(s,s)",
+            "(s,s,s,s,s)",
             jack_port_name(self->port),
-            jack_port_type(self->port)
+            jack_port_type(self->port),
+            port_is_input(self) ? "jack.Input" : (port_is_output(self) ? "jack.Output" : "?"),
+            port_is_physical(self) ? "True" : "False",
+            port_is_terminal(self) ? "True" : "False"
             );
     PyObject* repr = PyString_Format(format, args);
     Py_DECREF(args);
     return repr;
 }
 
+static unsigned char port_equal(const Port* port_a, const Port* port_b) 
+{
+    // return jack_port_uuid(port_a->port) == jack_port_uuid(port_b->port);
+    return strcmp(jack_port_name(port_a->port), jack_port_name(port_b->port)) == 0;
+}
+
+static PyObject* port_richcompare(Port* port_a, Port* port_b, int operation)
+{
+    PyObject* result; 
+
+    switch(operation) {
+        case Py_EQ:
+            result = port_equal(port_a, port_b) ? Py_True : Py_False;
+            break;
+        case Py_NE:
+            result = !port_equal(port_a, port_b) ? Py_True : Py_False;
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError, "This operation is not available for jack ports.");
+            return NULL;
+    }
+
+    Py_INCREF(result);
+    return result;
+}
+
+static void port_dealloc(Port* self)
+{
+    self->ob_type->tp_free((PyObject*)self);
+}
+
 static PyMethodDef port_methods[] = {
     {
         "is_input",
-        (PyCFunction)port_is_input,
+        (PyCFunction)python_port_is_input,
         METH_NOARGS,
         "Return true if the port can receive data.",
         },
     {
         "is_output",
-        (PyCFunction)port_is_output,
+        (PyCFunction)python_port_is_output,
         METH_NOARGS,
         "Return true if data can be read from the port.",
         },
@@ -695,11 +812,19 @@ PyMODINIT_FUNC initjack(void)
     port_type.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
     // Forbid direct instantiation.
     port_type.tp_new = NULL;
+    port_type.tp_dealloc = (destructor)port_dealloc;
     port_type.tp_repr = (reprfunc)port___repr__;
     port_type.tp_methods = port_methods;
+    port_type.tp_richcompare = (richcmpfunc)port_richcompare;
     if(PyType_Ready(&port_type) < 0) {
         return;
     }
     Py_INCREF(&port_type);
     PyModule_AddObject(module, "Port", (PyObject*)&port_type);
+
+    PyModule_AddIntConstant(module, "Input", port_input);
+    PyModule_AddIntConstant(module, "Output", port_output);
+
+    PyModule_AddStringConstant(module, "DefaultAudioPortType", JACK_DEFAULT_AUDIO_TYPE);
+    PyModule_AddStringConstant(module, "DefaultMidiPortType", JACK_DEFAULT_MIDI_TYPE);
 }
